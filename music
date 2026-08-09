@@ -1,1 +1,79 @@
-viết code logic nhạc ở đây
+-- ======================================================================
+-- MODULE LOGIC: MUSIC PLAYER
+-- ======================================================================
+
+local SoundService = game:GetService("SoundService")
+
+-- 1. Khởi tạo và đồng bộ bảng toàn cục
+_G.HubState = _G.HubState or {}
+_G.HubLogic = _G.HubLogic or {}
+
+-- Đồng bộ thuộc tính mặc định cho state nhạc
+_G.HubState.musicID = _G.HubState.musicID or ""
+_G.HubState.isMusicEnabled = _G.HubState.isMusicEnabled or false
+
+-- 2. Kiểm tra và khởi tạo đối tượng Sound duy nhất
+local SOUND_NAME = "Rayfield_Music_Player"
+local musicSound = SoundService:FindFirstChild(SOUND_NAME)
+
+if not musicSound then
+    musicSound = Instance.new("Sound")
+    musicSound.Name = SOUND_NAME
+    musicSound.Looped = true
+    musicSound.Volume = 0.5
+    musicSound.Parent = SoundService
+end
+
+-- 3. Hàm xử lý Bật/Tắt Nhạc: _G.HubLogic.ToggleMusic(enabled)
+_G.HubLogic.ToggleMusic = function(enabled)
+    _G.HubState.isMusicEnabled = enabled
+
+    if enabled == true then
+        local rawId = tonumber(_G.HubState.musicID)
+        
+        -- Kiểm tra tính hợp lệ của Sound ID
+        if rawId ~= nil and rawId > 0 then
+            musicSound.SoundId = "rbxassetid://" .. tostring(rawId)
+            
+            -- Bọc luồng Play() trong pcall để chống văng lỗi nếu ID bị xóa/bản quyền
+            local success, err = pcall(function()
+                musicSound:Play()
+            end)
+            
+            if not success then
+                warn("[Music Player]: Không thể phát nhạc! Lỗi: " .. tostring(err))
+            end
+        else
+            warn("[Music Player]: ID Sound không hợp lệ!")
+            _G.HubState.isMusicEnabled = false
+        end
+    else
+        -- Ngưng âm thanh ngay lập tức nếu tắt
+        musicSound:Stop()
+    end
+end
+
+-- 4. Hàm xử lý Cập nhật ID Nhạc: _G.HubLogic.UpdateMusicID(newIdText)
+_G.HubLogic.UpdateMusicID = function(newIdText)
+    _G.HubState.musicID = newIdText
+
+    -- Nếu trình phát nhạc đang BẬT, tiến hành chuyển bài ngay lập tức
+    if _G.HubState.isMusicEnabled == true then
+        musicSound:Stop()
+        
+        local rawId = tonumber(newIdText)
+        if rawId ~= nil and rawId > 0 then
+            musicSound.SoundId = "rbxassetid://" .. tostring(rawId)
+            
+            local success, err = pcall(function()
+                musicSound:Play()
+            end)
+            
+            if not success then
+                warn("[Music Player]: Không thể phát ID nhạc mới! Lỗi: " .. tostring(err))
+            end
+        else
+            warn("[Music Player]: ID Sound mới không hợp lệ!")
+        end
+    end
+end
