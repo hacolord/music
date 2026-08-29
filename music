@@ -39,20 +39,7 @@ local function playSoundSafely()
         musicSound.Volume = _G.HubState.musicVolume or 0.5
         
         task.spawn(function()
-            -- Tải trước tài nguyên âm thanh để sửa lỗi mất tiếng/không phát
-            pcall(function()
-                ContentProvider:PreloadAsync({musicSound})
-            end)
-            
-            -- Kiểm tra và chờ tải âm thanh an toàn có timeout để tránh bị kẹt luồng (infinite yield)
-            if not musicSound.IsLoaded then
-                local timeout = 0
-                while not musicSound.IsLoaded and timeout < 30 do
-                    task.wait(0.1)
-                    timeout = timeout + 1
-                end
-            end
-            
+            -- Trực tiếp phát trong pcall để Roblox tự stream âm thanh, chống crash do PreloadAsync gây Fatal Error
             if _G.HubState.isMusicEnabled and musicSound.SoundId == soundAssetId then
                 local success, err = pcall(function()
                     musicSound:Play()
