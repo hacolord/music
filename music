@@ -3,6 +3,7 @@
 -- ======================================================================
 
 local SoundService = game:GetService("SoundService")
+local ContentProvider = game:GetService("ContentProvider")
 
 -- 1. Khởi tạo và đồng bộ bảng toàn cục
 _G.HubState = _G.HubState or {}
@@ -11,6 +12,7 @@ _G.HubLogic = _G.HubLogic or {}
 -- Đồng bộ thuộc tính mặc định cho state nhạc
 _G.HubState.musicID = _G.HubState.musicID or ""
 _G.HubState.isMusicEnabled = _G.HubState.isMusicEnabled or false
+_G.HubState.musicVolume = _G.HubState.musicVolume or 0.5
 
 -- 2. Kiểm tra và khởi tạo đối tượng Sound duy nhất
 local SOUND_NAME = "Rayfield_Music_Player"
@@ -20,8 +22,45 @@ if not musicSound then
     musicSound = Instance.new("Sound")
     musicSound.Name = SOUND_NAME
     musicSound.Looped = true
-    musicSound.Volume = 0.5
+    musicSound.Volume = _G.HubState.musicVolume
     musicSound.Parent = SoundService
+end
+
+-- Hàm hỗ trợ phát nhạc an toàn và nạp âm thanh (Preload)
+local function playSoundSafely()
+    if not _G.HubState.isMusicEnabled then return end
+    
+    local rawId = tonumber(_G.HubState.musicID)
+    if rawId ~= nil and rawId > 0 then
+        local soundAssetId = "rbxassetid://" .. tostring(rawId)
+        
+        musicSound:Stop()
+        musicSound.SoundId = soundAssetId
+        musicSound.Volume = _G.HubState.musicVolume or 0.5
+        
+        task.spawn(function()
+            -- Tải trước tài nguyên âm thanh để sửa lỗi mất tiếng/không phát
+            pcall(function()
+                ContentProvider:PreloadAsync({musicSound})
+            end)
+            
+            if not musicSound.IsLoaded then
+                musicSound.Loaded:Wait()
+            end
+            
+            if _G.HubState.isMusicEnabled and musicSound.SoundId == soundAssetId then
+                local success, err = pcall(function()
+                    musicSound:Play()
+                end)
+                if not success then
+                    warn("[Music Player]: Không thể phát nhạc! Lỗi: " .. tostring(err))
+                end
+            end
+        end)
+    else
+        warn("[Music Player]: ID Sound không hợp lệ!")
+        _G.HubState.isMusicEnabled = false
+    end
 end
 
 -- 3. Hàm xử lý Bật/Tắt Nhạc: _G.HubLogic.ToggleMusic(enabled)
@@ -29,24 +68,7 @@ _G.HubLogic.ToggleMusic = function(enabled)
     _G.HubState.isMusicEnabled = enabled
 
     if enabled == true then
-        local rawId = tonumber(_G.HubState.musicID)
-        
-        -- Kiểm tra tính hợp lệ của Sound ID
-        if rawId ~= nil and rawId > 0 then
-            musicSound.SoundId = "rbxassetid://" .. tostring(rawId)
-            
-            -- Bọc luồng Play() trong pcall để chống văng lỗi nếu ID bị xóa/bản quyền
-            local success, err = pcall(function()
-                musicSound:Play()
-            end)
-            
-            if not success then
-                warn("[Music Player]: Không thể phát nhạc! Lỗi: " .. tostring(err))
-            end
-        else
-            warn("[Music Player]: ID Sound không hợp lệ!")
-            _G.HubState.isMusicEnabled = false
-        end
+        playSoundSafely()
     else
         -- Ngưng âm thanh ngay lập tức nếu tắt
         musicSound:Stop()
@@ -59,21 +81,15 @@ _G.HubLogic.UpdateMusicID = function(newIdText)
 
     -- Nếu trình phát nhạc đang BẬT, tiến hành chuyển bài ngay lập tức
     if _G.HubState.isMusicEnabled == true then
-        musicSound:Stop()
-        
-        local rawId = tonumber(newIdText)
-        if rawId ~= nil and rawId > 0 then
-            musicSound.SoundId = "rbxassetid://" .. tostring(rawId)
-            
-            local success, err = pcall(function()
-                musicSound:Play()
-            end)
-            
-            if not success then
-                warn("[Music Player]: Không thể phát ID nhạc mới! Lỗi: " .. tostring(err))
-            end
-        else
-            warn("[Music Player]: ID Sound mới không hợp lệ!")
-        end
+        playSoundSafely()
+    end
+end
+
+-- 5. Hàm xử lý Cập nhật Âm lượng Nhạc: _G.HubLogic.UpdateMusicVolume(vol)
+_G.HubLogic.UpdateMusicVolume = function(vol)
+    local volumeNum = tonumber(vol) or 0.5
+    _G.HubState.musicVolume = volumeNum
+    if musicSound then
+        musicSound.Volume = volumeNum
     end
 end
